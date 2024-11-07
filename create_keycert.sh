@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # written with the help of
-#   https://jamielinux.com/docs/openssl-certificate-authority/index.html
+#   https://jamielinux.com/docs/openssl-certificate-authority
 #
 
 usage_exit () {
