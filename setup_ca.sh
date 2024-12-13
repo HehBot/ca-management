@@ -140,7 +140,7 @@ common_setup () {
     sed -i "s~XXXXDIRXXXX~${CA_DIR}~g" "${CA_CONF}"
     sed -i "s~XXXXCNXXXX~${CA_CN}~g" "${CA_CONF}"
 
-    mkdir -p "${CA_DIR}"/{certs,crl,csr,newcerts,private}
+    mkdir -p "${CA_DIR}"/{certs,crl,newcerts,private}
     chmod 700 "${CA_DIR}/private"
     touch "${CA_DIR}/index.txt"
     echo 1000 > "${CA_DIR}/serial"
@@ -148,9 +148,10 @@ common_setup () {
 
     # create key
     CA_KEY="${CA_DIR}/private/${CA_CN}.key.pem"
+    read -sp "Create a passphrase for the CA: " CA_PASSPHRASE
     echo
-    echo "You will now be prompted to create a passphrase for the CA"
-    openssl genrsa -aes256 -out "${CA_KEY}" 4096
+    export CA_PASSPHRASE
+    openssl genrsa -aes256 -out "${CA_KEY}" -passout env:CA_PASSPHRASE 4096
     checkerr
     chmod 400 "${CA_KEY}"
 }
@@ -160,9 +161,9 @@ new_root_ca () {
 
     # create cert
     CA_CERT="${CA_DIR}/certs/${CA_CN}.cert.pem"
-    echo
-    echo "You will now be prompted for the passphrase of the CA"
-    openssl req -config "${CA_CONF}" -key "${CA_KEY}" \
+    openssl req -config "${CA_CONF}" \
+        -key "${CA_KEY}" \
+        -passin env:CA_PASSPHRASE \
         -new -x509 -days 7300 -sha256 -extensions v3_ca \
         -subj "/C=IN/ST=Maharashtra/O=coffre/CN=${CA_CN}" \
         -out "${CA_CERT}"
@@ -180,23 +181,26 @@ new_non_root_ca() {
         exit 1
     fi
     PARENT_CA_CN="$(cat "${PARENT_CA_DIR}/cn")"
+    PARENT_CA_PASSIN="$4"
 
     common_setup "$1" "$2"
 
     # create csr
-    CA_CSR="${CA_DIR}/csr/${CA_CN}.csr.pem"
-    echo
-    echo "You will now be prompted for the passphrase of the CA"
+    CA_CSR="$(mktemp)"
     openssl req -config "${CA_CONF}" -new -sha256 \
+        -passin env:CA_PASSPHRASE \
         -key "${CA_KEY}" \
         -subj "/C=IN/ST=Maharashtra/O=coffre/CN=${CA_CN}" \
         -out "${CA_CSR}"
 
     # create cert
     CA_CERT="${CA_DIR}/certs/${CA_CN}.cert.pem"
-    echo
-    echo "You will now be prompted for the passphrase of the parent CA"
+    if [[ "${PARENT_CA_PASSIN}" == "stdin" ]]; then
+        echo
+        echo "Enter the passphrase of the parent CA"
+    fi
     openssl ca -config "${PARENT_CA_CONF}" -extensions v3_intermediate_ca \
+        -passin "${PARENT_CA_PASSIN}" \
         -days 3650 -notext -md sha256 \
         -batch \
         -in "${CA_CSR}" \
@@ -212,9 +216,8 @@ new_non_root_ca() {
 
     # create crl
     CA_CRL="${CA_DIR}/crl/${CA_CN}.crl.pem"
-    echo
-    echo "You will now be prompted for the passphrase of the CA"
     openssl ca -config "${CA_CONF}" -gencrl \
+        -passin env:CA_PASSPHRASE \
         -out "${CA_CRL}"
     checkerr
 }
@@ -222,11 +225,15 @@ new_non_root_ca() {
 if [[ $# == 3 ]] && [[ "$1" == "newRootCA" ]]; then
     new_root_ca "$2" "$3"
     exit 0
-elif [[ $# == 4 ]] && [[ "$1" == "newNonRootCA" ]]; then
-    new_non_root_ca "$2" "$3" "$4"
+elif [[ $# == 4 ]] || [[ $# == 5 ]] && [[ "$1" == "newNonRootCA" ]]; then
+    if [[ $# == 4 ]]; then
+        new_non_root_ca "$2" "$3" "$4" "stdin"
+    else
+        new_non_root_ca "$2" "$3" "$4" "file:$5"
+    fi
     exit 0
 else
     echo "Usage: $0 newRootCA <CA dir to create> <CA CN>"
-    echo "Usage: $0 newNonRootCA <CA dir to create> <CA CN> <parent CA dir>"
+    echo "Usage: $0 newNonRootCA <CA dir to create> <CA CN> <parent CA dir> [parent CA passfile]"
     exit 1
 fi

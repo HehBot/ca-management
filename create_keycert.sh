@@ -5,11 +5,11 @@
 #
 
 usage_exit () {
-    echo "Usage: $0 (newServerKeyCert|newClientKeyCert) <CA dir> <CN>"
+    echo "Usage: $0 (newServerKeyCert|newClientKeyCert) <CA dir> <CN> [CA passfile]"
     exit 0
 }
 
-if ! [[ $# -eq 3 ]]; then
+if ! [[ $# -eq 3 ]] && ! [[ $# -eq 4 ]]; then
     usage_exit
 fi
 
@@ -23,6 +23,10 @@ fi
 CA_DIR="$2"
 CA_CONF="${CA_DIR}/openssl.conf"
 CN="$3"
+CA_PASSIN="stdin"
+if [[ $# -eq 4 ]]; then
+    CA_PASSIN="file:$4"
+fi
 
 if ! [[ -f "${CA_DIR}/cn" ]]; then
     echo "CA not found (searched for file '${CA_DIR}/cn')"
@@ -47,7 +51,7 @@ openssl genrsa -out "${KEY}" 2048
 chmod 400 "${KEY}"
 
 # create certificate
-CSR="${CA_DIR}/csr/${CN}.csr.pem"
+CSR="$(mktemp)"
 openssl req -config "${CA_CONF}" \
     -key "${KEY}" \
     -subj "/C=IN/ST=Maharashtra/O=coffre/CN=${CN}" \
@@ -55,9 +59,12 @@ openssl req -config "${CA_CONF}" \
 
 # have intermediate CA sign the certificate
 CERT="${CA_DIR}/certs/${CN}.cert.pem"
-echo "You will now be prompted for the passphrase of the CA"
+if [[ "${CA_PASSIN}" == "stdin" ]]; then
+    echo "Enter the passphrase of the CA"
+fi
 openssl ca -config "${CA_CONF}" \
     -extensions "${PURPOSE}" -days 375 -notext -md sha256 \
+    -passin "${CA_PASSIN}" \
     -batch \
     -in "${CSR}" \
     -out "${CERT}"
