@@ -60,7 +60,9 @@ openssl req -config "${CA_CONF}" \
 # have intermediate CA sign the certificate
 CERT="${CA_DIR}/certs/${CN}.cert.pem"
 if [[ "${CA_PASSIN}" == "stdin" ]]; then
-    echo "Enter the passphrase of the CA"
+    read -sp "Enter the passphrase of the CA: " CA_PASSPHRASE; echo
+    export CA_PASSPHRASE
+    CA_PASSIN="env:CA_PASSPHRASE"
 fi
 openssl ca -config "${CA_CONF}" \
     -extensions "${PURPOSE}" -days 375 -notext -md sha256 \

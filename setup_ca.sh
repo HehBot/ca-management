@@ -148,8 +148,7 @@ common_setup () {
 
     # create key
     CA_KEY="${CA_DIR}/private/${CA_CN}.key.pem"
-    read -sp "Create a passphrase for the CA: " CA_PASSPHRASE
-    echo
+    read -sp "Create a passphrase for the CA: " CA_PASSPHRASE; echo
     export CA_PASSPHRASE
     openssl genrsa -aes256 -out "${CA_KEY}" -passout env:CA_PASSPHRASE 4096
     checkerr
@@ -196,8 +195,9 @@ new_non_root_ca() {
     # create cert
     CA_CERT="${CA_DIR}/certs/${CA_CN}.cert.pem"
     if [[ "${PARENT_CA_PASSIN}" == "stdin" ]]; then
-        echo
-        echo "Enter the passphrase of the parent CA"
+        read -sp "Enter the passphrase of the parent CA: " PARENT_CA_PASSPHRASE; echo
+        export PARENT_CA_PASSPHRASE
+        PARENT_CA_PASSIN="env:PARENT_CA_PASSPHRASE"
     fi
     openssl ca -config "${PARENT_CA_CONF}" -extensions v3_intermediate_ca \
         -passin "${PARENT_CA_PASSIN}" \

@@ -45,7 +45,9 @@ fi
 
 # revoke cert
 if [[ "${CA_PASSIN}" == "stdin" ]]; then
-    echo "Enter the passphrase of the CA"
+    read -sp "Enter the passphrase of the CA: " CA_PASSPHRASE; echo
+    export CA_PASSPHRASE
+    CA_PASSIN="env:CA_PASSPHRASE"
 fi
 openssl ca -config "${CA_CONF}" \
     -passin "${CA_PASSIN}" \
@@ -54,9 +56,6 @@ openssl ca -config "${CA_CONF}" \
 
 # create crl
 CA_CRL="${CA_DIR}/crl/${CA_CN}.crl.pem"
-if [[ "${CA_PASSIN}" == "stdin" ]]; then
-    echo "Enter the passphrase of the CA"
-fi
 openssl ca -config "${CA_CONF}" -gencrl \
     -passin "${CA_PASSIN}" \
     -out "${CA_CRL}"
